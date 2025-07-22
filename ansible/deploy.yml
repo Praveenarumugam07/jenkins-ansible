@@ -1,0 +1,71 @@
+---
+- name: Deploy app from Jenkins GitHub clone to all servers
+  hosts: webservers
+  become: yes
+
+  tasks:
+    - name: Ensure app directory exists
+      file:
+        path: /home/praveen_a/app
+        state: directory
+        owner: praveen_a
+        group: praveen_a
+        mode: '0755'
+
+    - name: Copy code from Jenkins workspace
+      copy:
+        src: "{{ playbook_dir }}/../"
+        dest: /home/praveen_a/app/
+        owner: praveen_a
+        group: praveen_a
+        mode: '0755'
+
+    - name: Ensure Python3 and venv are installed
+      apt:
+        name:
+          - python3
+          - python3-venv
+        state: present
+        update_cache: yes
+
+    - name: Create Python virtual environment
+      command: python3 -m venv /home/praveen_a/app/venv
+      args:
+        creates: /home/praveen_a/app/venv
+
+    - name: Install Flask in virtual environment
+      shell: |
+        source /home/praveen_a/app/venv/bin/activate
+        pip install flask
+      args:
+        executable: /bin/bash
+
+    - name: Create systemd service file for Flask app
+      copy:
+        dest: /etc/systemd/system/flask-app.service
+        content: |
+          [Unit]
+          Description=Flask App Service
+          After=network.target
+
+          [Service]
+          User=<username>
+          WorkingDirectory=/home/praveen_a/app
+          ExecStart=/home/praveen_a/app/venv/bin/python /home/praveen_a/app/app.py
+          Restart=always
+          Environment=FLASK_ENV=production
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - Reload systemd
+
+    - name: Enable and start flask-app service
+      systemd:
+        name: flask-app
+        enabled: yes
+        state: restarted
+
+  handlers:
+    - name: Reload systemd
+      command: systemctl daemon-reexec
