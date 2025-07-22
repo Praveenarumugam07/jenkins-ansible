@@ -1,9 +1,22 @@
 ---
-- name: Deploy app from Jenkins GitHub clone to all servers
+- name: Deploy Flask app using Ansible
   hosts: webservers
   become: yes
 
   tasks:
+    - name: Ensure required packages are installed
+      apt:
+        name:
+          - python3
+          - python3-pip
+        state: present
+        update_cache: yes
+
+    - name: Install Flask globally using pip3
+      pip:
+        name: flask
+        executable: pip3
+
     - name: Ensure app directory exists
       file:
         path: /home/praveen_a/app
@@ -12,7 +25,7 @@
         group: praveen_a
         mode: '0755'
 
-    - name: Copy code from Jenkins workspace
+    - name: Copy application code to server
       copy:
         src: "{{ playbook_dir }}/../"
         dest: /home/praveen_a/app/
@@ -20,52 +33,20 @@
         group: praveen_a
         mode: '0755'
 
-    - name: Ensure Python3 and venv are installed
-      apt:
-        name:
-          - python3
-          - python3-venv
-        state: present
-        update_cache: yes
-
-    - name: Create Python virtual environment
-      command: python3 -m venv /home/praveen_a/app/venv
-      args:
-        creates: /home/praveen_a/app/venv
-
-    - name: Install Flask in virtual environment
+    - name: Kill any existing app.py process
       shell: |
-        source /home/praveen_a/app/venv/bin/activate
-        pip install flask
+        pkill -f app.py || true
+
+    - name: Start Flask app using nohup
+      shell: |
+        cd /home/praveen_a/app
+        nohup python3 app.py > app.log 2>&1 &
       args:
         executable: /bin/bash
 
-    - name: Create systemd service file for Flask app
-      copy:
-        dest: /etc/systemd/system/flask-app.service
-        content: |
-          [Unit]
-          Description=Flask App Service
-          After=network.target
+    - name: Verify app.py is running
+      shell: pgrep -f app.py
+      register: app_status
+      failed_when: app_status.rc != 0
+      changed_when: false
 
-          [Service]
-          User=<username>
-          WorkingDirectory=/home/praveen_a/app
-          ExecStart=/home/praveen_a/app/venv/bin/python /home/praveen_a/app/app.py
-          Restart=always
-          Environment=FLASK_ENV=production
-
-          [Install]
-          WantedBy=multi-user.target
-      notify:
-        - Reload systemd
-
-    - name: Enable and start flask-app service
-      systemd:
-        name: flask-app
-        enabled: yes
-        state: restarted
-
-  handlers:
-    - name: Reload systemd
-      command: systemctl daemon-reexec
