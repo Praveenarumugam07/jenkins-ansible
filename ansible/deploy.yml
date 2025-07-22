@@ -8,14 +8,9 @@
       apt:
         name:
           - python3
-          - python3-pip
+          - python3-venv
         state: present
         update_cache: yes
-
-    - name: Install Flask globally
-      pip:
-        name: flask
-        executable: pip3
 
     - name: Ensure app directory exists
       file:
@@ -33,19 +28,33 @@
         group: praveen_a
         mode: '0755'
 
+    - name: Create Python virtual environment if not exists
+      command: python3 -m venv /home/praveen_a/app/venv
+      args:
+        creates: /home/praveen_a/app/venv
+
+    - name: Install Flask inside venv
+      shell: |
+        source /home/praveen_a/app/venv/bin/activate
+        pip install --upgrade pip
+        pip install flask
+      args:
+        executable: /bin/bash
+
     - name: Kill existing app.py process if running
       shell: |
-        pkill -f app.py || true
+        pkill -f "venv/bin/python /home/praveen_a/app/app.py" || true
 
-    - name: Start Flask app with nohup
+    - name: Start Flask app using nohup with venv python
       shell: |
         cd /home/praveen_a/app
-        nohup python3 app.py > app.log 2>&1 &
+        source venv/bin/activate
+        nohup venv/bin/python app.py > app.log 2>&1 &
       args:
         executable: /bin/bash
 
     - name: Verify app.py is running
-      shell: pgrep -f app.py
+      shell: pgrep -f "venv/bin/python /home/praveen_a/app/app.py"
       register: app_status
       failed_when: app_status.rc != 0
       changed_when: false
