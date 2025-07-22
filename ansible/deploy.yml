@@ -4,7 +4,7 @@
   become: yes
 
   tasks:
-    - name: Ensure required packages are installed
+    - name: Update apt cache and install required packages
       apt:
         name:
           - python3
@@ -12,7 +12,7 @@
         state: present
         update_cache: yes
 
-    - name: Install Flask globally using pip3
+    - name: Install Flask globally
       pip:
         name: flask
         executable: pip3
@@ -33,11 +33,11 @@
         group: praveen_a
         mode: '0755'
 
-    - name: Kill any existing app.py process
+    - name: Kill existing app.py process if running
       shell: |
         pkill -f app.py || true
 
-    - name: Start Flask app using nohup
+    - name: Start Flask app with nohup
       shell: |
         cd /home/praveen_a/app
         nohup python3 app.py > app.log 2>&1 &
@@ -49,4 +49,3 @@
       register: app_status
       failed_when: app_status.rc != 0
       changed_when: false
-
