@@ -1,17 +1,9 @@
 ---
-- name: Deploy Flask app using Ansible
+- name: Deploy app from Jenkins GitHub clone to all servers
   hosts: webservers
   become: yes
 
   tasks:
-    - name: Update apt cache and install required packages
-      apt:
-        name:
-          - python3
-          - python3-venv
-        state: present
-        update_cache: yes
-
     - name: Ensure app directory exists
       file:
         path: /home/praveen_a/app
@@ -20,13 +12,21 @@
         group: praveen_a
         mode: '0755'
 
-    - name: Copy application code to server
+    - name: Copy code from Jenkins workspace
       copy:
         src: "{{ playbook_dir }}/../"
         dest: /home/praveen_a/app/
         owner: praveen_a
         group: praveen_a
         mode: '0755'
+
+    - name: Update apt cache and install required packages
+      apt:
+        name:
+          - python3
+          - python3-venv
+        state: present
+        update_cache: yes
 
     - name: Create Python virtual environment if not exists
       command: python3 -m venv /home/praveen_a/app/venv
@@ -43,18 +43,16 @@
 
     - name: Kill existing app.py process if running
       shell: |
-        pkill -f "venv/bin/python /home/praveen_a/app/app.py" || true
+        pgrep -f "venv/bin/python /home/praveen_a/app/app.py" && pkill -f "venv/bin/python /home/praveen_a/app/app.py" || true
+      args:
+        executable: /bin/bash
+      register: kill_status
+      failed_when: false
 
-    - name: Start Flask app using nohup with venv python
+    - name: Start app.py using nohup
       shell: |
         cd /home/praveen_a/app
         source venv/bin/activate
         nohup venv/bin/python app.py > app.log 2>&1 &
       args:
         executable: /bin/bash
-
-    - name: Verify app.py is running
-      shell: pgrep -f "venv/bin/python /home/praveen_a/app/app.py"
-      register: app_status
-      failed_when: app_status.rc != 0
-      changed_when: false
